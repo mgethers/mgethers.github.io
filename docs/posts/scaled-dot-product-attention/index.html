@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.8.27">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="dcterms.date" content="2026-03-18">
+<meta name="description" content="The foundational intuitions behind scaled dot product attention, the core operation of the transformer architecture.">
+
+<title>Scaled Dot Product Attention – Michael Gethers</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+</style>
+
+
+<script src="../../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../../">
+<script src="../../site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="../../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="../../site_libs/quarto-html/axe/axe-check.js" type="module"></script>
+<script src="../../site_libs/quarto-html/popper.min.js"></script>
+<script src="../../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../../site_libs/quarto-html/quarto-syntax-highlighting-ed96de9b727972fe78a7b5d16c58bf87.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="../../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../../site_libs/bootstrap/bootstrap-5b4ad623e5705c0698d39aec6f10cf02.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+<link rel="stylesheet" href="../../styles.css">
+</head>
+
+<body class="nav-fixed quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container mx-auto">
+    <a class="navbar-brand" href="../../index.html">
+    <span class="navbar-title">Michael Gethers</span>
+    </a>
+  </div>
+            <div id="quarto-search" class="" title="Search"></div>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" role="menu" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+  <span class="navbar-toggler-icon"></span>
+</button>
+          <div class="collapse navbar-collapse" id="navbarCollapse">
+            <ul class="navbar-nav navbar-nav-scroll me-auto">
+  <li class="nav-item">
+    <a class="nav-link" href="../../index.html"> 
+<span class="menu-text">Home</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../../posts/index.html"> 
+<span class="menu-text">Writing</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../../about.html"> 
+<span class="menu-text">About</span></a>
+  </li>  
+</ul>
+          </div> <!-- /navcollapse -->
+            <div class="quarto-navbar-tools">
+</div>
+      </div> <!-- /container-fluid -->
+    </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#introduction" id="toc-introduction" class="nav-link active" data-scroll-target="#introduction">Introduction</a></li>
+  <li><a href="#the-function" id="toc-the-function" class="nav-link" data-scroll-target="#the-function">The function</a></li>
+  <li><a href="#the-q-k-and-v-matrices" id="toc-the-q-k-and-v-matrices" class="nav-link" data-scroll-target="#the-q-k-and-v-matrices">The <span class="math inline">\(Q\)</span>, <span class="math inline">\(K\)</span>, and <span class="math inline">\(V\)</span> matrices</a>
+  <ul class="collapse">
+  <li><a href="#an-analogy" id="toc-an-analogy" class="nav-link" data-scroll-target="#an-analogy">An analogy</a></li>
+  <li><a href="#more-explicitly" id="toc-more-explicitly" class="nav-link" data-scroll-target="#more-explicitly">More explicitly</a></li>
+  </ul></li>
+  <li><a href="#walking-through-the-math" id="toc-walking-through-the-math" class="nav-link" data-scroll-target="#walking-through-the-math">Walking through the math</a>
+  <ul class="collapse">
+  <li><a href="#what-does-this-n-times-n-matrix-represent" id="toc-what-does-this-n-times-n-matrix-represent" class="nav-link" data-scroll-target="#what-does-this-n-times-n-matrix-represent">What does this <span class="math inline">\(n \times n\)</span> matrix represent?</a></li>
+  <li><a href="#scaling-by-1sqrtd_k" id="toc-scaling-by-1sqrtd_k" class="nav-link" data-scroll-target="#scaling-by-1sqrtd_k">Scaling by <span class="math inline">\(1/\sqrt{d_k}\)</span></a></li>
+  <li><a href="#masking" id="toc-masking" class="nav-link" data-scroll-target="#masking">Masking</a></li>
+  <li><a href="#the-operatornamesoftmax" id="toc-the-operatornamesoftmax" class="nav-link" data-scroll-target="#the-operatornamesoftmax">The <span class="math inline">\(\operatorname{softmax}\)</span></a></li>
+  <li><a href="#the-final-step-multiplying-by-v" id="toc-the-final-step-multiplying-by-v" class="nav-link" data-scroll-target="#the-final-step-multiplying-by-v">The final step, multiplying by <span class="math inline">\(V\)</span></a></li>
+  </ul></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Scaled Dot Product Attention</h1>
+  <div class="quarto-categories">
+    <div class="quarto-category">transformers</div>
+    <div class="quarto-category">deep learning</div>
+    <div class="quarto-category">attention</div>
+  </div>
+  </div>
+
+<div>
+  <div class="description">
+    The foundational intuitions behind scaled dot product attention, the core operation of the transformer architecture.
+  </div>
+</div>
+
+
+<div class="quarto-title-meta">
+
+    
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">March 18, 2026</p>
+    </div>
+  </div>
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<p><em>Written by Michael Gethers</em></p>
+<section id="introduction" class="level2">
+<h2 class="anchored" data-anchor-id="introduction">Introduction</h2>
+<p>The purpose of this document is to fully articulate the foundational intuitions of scaled dot product attention.</p>
+<p>This will be the first in a series of documents I intend to put together about the Attention is All You Need paper. My intent is that this will serve both to edify my own understanding of the paper’s concepts, but that it may also help others to build a practical understanding of the hows and whys of transformer architecture.</p>
+</section>
+<section id="the-function" class="level2">
+<h2 class="anchored" data-anchor-id="the-function">The function</h2>
+<p>The scaled dot product attention function, as shown in the Attention is All You Need paper, is the following: <span class="math display">\[
+\mathrm{Attention}(Q, K, V) = \mathrm{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V
+\]</span></p>
+<p>Where <span class="math inline">\(Q\)</span> and <span class="math inline">\(K\)</span> are matrices of size <code>(batches, sequence_length, d_k)</code>, and <span class="math inline">\(V\)</span> is a matrix of size <code>(batches, sequence_length, d_v)</code>. Though one could theoretically design an architecture such that <span class="math inline">\(d_k\)</span> and <span class="math inline">\(d_v\)</span> were not equal (i.e.&nbsp;there is no mathematical constraint requiring these to be equal), in practice and in the paper, <span class="math inline">\(d_k = d_v\)</span>.</p>
+<p><code>batches</code> are also included for computational efficiency in training, but are not fundamental to understanding the scaled dot product architecture. So for now, we will assume the following simplification:</p>
+<ul>
+<li><span class="math inline">\(Q \in \mathbb{R}^{\text{n} \times d_k}\)</span></li>
+<li><span class="math inline">\(K \in \mathbb{R}^{\text{n} \times d_k}\)</span></li>
+<li><span class="math inline">\(V \in \mathbb{R}^{\text{n} \times d_v}\)</span></li>
+</ul>
+<p><span class="math inline">\(n\)</span> here is the sequence length. <span class="math inline">\(d_k\)</span> is determined by the full <span class="math inline">\(d_{model}\)</span> and the number of attention heads used. This will be discussed in the multi-head attention section, but we will not discuss this yet here. For now, know that the paper used <span class="math inline">\(d_{model} = 512\)</span> and 8 attention heads, so <span class="math display">\[d_k = d_v = \frac{d_{model}}{n_{heads}} = \frac{512}{8} = 64\]</span></p>
+</section>
+<section id="the-q-k-and-v-matrices" class="level2">
+<h2 class="anchored" data-anchor-id="the-q-k-and-v-matrices">The <span class="math inline">\(Q\)</span>, <span class="math inline">\(K\)</span>, and <span class="math inline">\(V\)</span> matrices</h2>
+<p><span class="math inline">\(Q\)</span>, <span class="math inline">\(K\)</span>, and <span class="math inline">\(V\)</span> matrices are all randomly initialized matrices of the same dimensions. However, the architecture of scaled dot product attention, and the transformer architecture more broadly, allows them to take on meaning as the model learns:</p>
+<ul>
+<li><span class="math inline">\(Q\)</span>: the query matrix</li>
+<li><span class="math inline">\(K\)</span>: the keys matrix</li>
+<li><span class="math inline">\(V\)</span>: the values matrix</li>
+</ul>
+<p>Remember, each of these matrices has <strong>one row for every token</strong> in the input sequence, so each row effectively represents the query vector (in <span class="math inline">\(Q\)</span>), key vector (in <span class="math inline">\(K\)</span>), and the value vector (in <span class="math inline">\(V\)</span>) for each respective token.</p>
+<section id="an-analogy" class="level3">
+<h3 class="anchored" data-anchor-id="an-analogy">An analogy</h3>
+<p>But the concepts of <em>queries</em>, <em>keys</em>, and <em>values</em> are a bit abstract at first glance, so I’ve found it useful to think of these as an analogy to a library.</p>
+<p>A <em>query</em> would be what someone is looking for when they go to the library: “I’m looking for information about the French Revolution”.</p>
+<p>A <em>key</em> might be what’s on the spines of each book in the library: A Tale of Two Cities, To Kill a Mockingbird, Interpreting the French Revolution, Infinite Jest, etc.</p>
+<p>A <em>value</em> would be the actual content of those books: what information does this book actually contain.</p>
+<p>The transformer is designed to allow queries about the French Revolution to determine that To Kill a Mockingbird and Infinite Jest probably provide very little relevant information, A Tale of Two Cities may contain a bit, and that Interpreting the French Revolution probably contains a lot, and then to synthesize the content of those books into a coherent summary of the relevant information.</p>
+</section>
+<section id="more-explicitly" class="level3">
+<h3 class="anchored" data-anchor-id="more-explicitly">More explicitly</h3>
+<p>Our task is different, so while the library analogy is useful to generate a baseline understanding of what these matrices are intended to learn, we can make the task more explicit.</p>
+<p>What the scaled dot product attention architecture is actually trying to do is something much more similar to this:</p>
+<p>Take a sentence, like:</p>
+<pre><code>The creek was cold and the spunky dog wanted to jump over it.</code></pre>
+<p>As a human, when we read this sentence, it is clear to us that “cold” is referring to the “creek”, “spunky” is referring to “dog”, and “it” is referring to the “creek”.</p>
+<p>This is essentially what the scaled dot product attention function is attempting to learn. <em>What other words/tokens in the sequence should the model <strong>pay attention</strong> to when trying to understand the meaning of the word “it”?</em></p>
+<p>In this example, the query would be “it”, which has its own vector in the <span class="math inline">\(Q\)</span> matrix, call it <span class="math inline">\(q_{\mathrm{it}}\)</span>. Every other token in the sequence has its own vector in the <span class="math inline">\(K\)</span> matrix (the other matrices as well, but for now we’re interested in <span class="math inline">\(K\)</span>). We would like our model to learn that “it” and “creek” are related, and the way that gets encoded in the model is through a large dot product between <span class="math inline">\(q_{\mathrm{it}}\)</span> and <span class="math inline">\(k_{\mathrm{creek}}\)</span>, and a small dot product between <span class="math inline">\(q_{\mathrm{it}}\)</span> and vectors in <span class="math inline">\(K\)</span> that are irrelevant to understanding “it”.</p>
+<p>The <span class="math inline">\(V\)</span> values matrix is then the final synthesis of this content. When appropriately trained, the softmax function allows us to see that “it” refers to “creek”, and maybe a bit to “cold”, and to very little else in the sequence. This breakdown gets multiplied by the <span class="math inline">\(V\)</span> matrix to produce the final output of this single scaled dot product attention head.</p>
+<p>It is important to note: there is nothing fundamental about the matrices themselves that makes them useful as queries, keys, or values: they are simply randomly initialized matrices of the same dimensions. Their usefulness emerges out of the architecture of scaled dot product attention and the training process: every time the model makes an incorrect prediction that resulted from the fact that “it” and “creek” were not recognized as related tokens, the model gets nudged in a direction that associates them more closely together.</p>
+</section>
+</section>
+<section id="walking-through-the-math" class="level2">
+<h2 class="anchored" data-anchor-id="walking-through-the-math">Walking through the math</h2>
+<p><span class="math display">\[
+\mathrm{Attention}(Q, K, V) = \mathrm{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V
+\]</span> The first matrix multiplication that happens here between <span class="math inline">\(Q\)</span> and <span class="math inline">\(K^T\)</span>. Recall that these are each <span class="math inline">\(n \times d_k\)</span> matrices, so the output of this matrix multiplication is an <span class="math inline">\(n \times n\)</span> matrix, where <span class="math inline">\(n\)</span> is the sequence length.</p>
+<section id="what-does-this-n-times-n-matrix-represent" class="level3">
+<h3 class="anchored" data-anchor-id="what-does-this-n-times-n-matrix-represent">What does this <span class="math inline">\(n \times n\)</span> matrix represent?</h3>
+<p><span class="math display">\[
+C = QK^T
+\]</span> Let’s think about this operation, and what the resulting matrix, which I’ll call <span class="math inline">\(C\)</span>, represents. When we multiply the <span class="math inline">\(Q\)</span> and <span class="math inline">\(K^T\)</span> matrices, we get one row and one column for every token in the sequence. In this matrix <span class="math inline">\(C\)</span> we have the following entries <span class="math inline">\(c_{(i,j)}\)</span>:</p>
+<ul>
+<li><span class="math inline">\(c_{(1,1)}\)</span>: dot product of the 1st token’s query vector, multiplied by the 1st token’s own key vector</li>
+<li><span class="math inline">\(c_{(2,1)}\)</span>: dot product of the 2nd token’s query vector, multiplied by the 1st token’s key vector</li>
+<li><span class="math inline">\(c_{(1,2)}\)</span>: dot product of the 1st token’s query vector, multiplied by the 2nd token’s key vector</li>
+<li>…</li>
+</ul>
+<p>This is essentially a relevance score: how relevant is the <span class="math inline">\(j\mathrm{th}\)</span> key to the <span class="math inline">\(i\mathrm{th}\)</span> query? The higher that dot product, the more relevant those tokens are to each other.</p>
+</section>
+<section id="scaling-by-1sqrtd_k" class="level3">
+<h3 class="anchored" data-anchor-id="scaling-by-1sqrtd_k">Scaling by <span class="math inline">\(1/\sqrt{d_k}\)</span></h3>
+<p>Scaling by <span class="math inline">\(1/\sqrt{d_k}\)</span> is the novel tweak that this paper made to previous existing attention mechanisms, and is founded in the simple idea that as <span class="math inline">\(d_k\)</span> increases, the variance of the dot products in <span class="math inline">\(C\)</span> are going to increase as well.</p>
+<p>Increasing <span class="math inline">\(d_k\)</span> pushes these dot products out into the tails of the softmax function, where the gradient is very small. Scaling them brings them back toward the center, but the selection of <span class="math inline">\(1/\sqrt{d_k}\)</span> is not arbitrary.</p>
+<p>Let’s try to understand this choice. We operate under the assumption that our <span class="math inline">\(Q\)</span> and <span class="math inline">\(K\)</span> matrices contain rows that are distributed with mean 0 and variance 1.</p>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-1-contents" aria-controls="callout-1" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-1" class="callout-1-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<p>This is reasonable assumption for a few reasons:</p>
+<ol type="1">
+<li>Weight initialization: network weights are typically initialized in a way that is designed to produce mean 0 and variance 1 activations throughout the network. So at the start of training, the assumption is approximately true by design.</li>
+<li>Layer normalization: we will discuss this in a future document, but the Transfomer applies layer normalization before the attention operation. Layer norm explicitly normalizes its output to have mean 0 and variance 1 across the feature dimensions, giving us row-wise normalization.</li>
+<li>Linear projections: this will also be discussed later, but if <span class="math inline">\(x \sim(0, 1)\)</span>, and <span class="math inline">\(W\)</span> has iid mean-0 entries with variance <span class="math inline">\(1 / d\)</span>, then <span class="math inline">\(W x\)</span> has mean 0 and variance <span class="math inline">\(\approx 1\)</span>.</li>
+</ol>
+<p>The <span class="math inline">\((0,1)\)</span> assumption will be discussed in more depth in future posts. For now, let us assume that our <span class="math inline">\(Q\)</span> and <span class="math inline">\(K\)</span> matrices are distributed <span class="math inline">\((0,1)\)</span>.</p>
+</div>
+</div>
+</div>
+<p>Let’s first revisit some fundamental statistics identities, first of the definition of variance of a random variable <span class="math inline">\(X\)</span>: <span class="math display">\[
+\begin{align}
+\operatorname{Var}(X) &amp;= \mathbb{E}[X^2] - \mathbb{E}[X]^2 \\
+\implies \mathbb{E}[X^2] &amp;= \operatorname{Var}(X) + \mathbb{E}[X]^2
+\end{align}
+\]</span> And of a the variance of the product <span class="math inline">\(XY\)</span>, where <span class="math inline">\(X\)</span> and <span class="math inline">\(Y\)</span> are independent: <span class="math display">\[
+\begin{align}
+\operatorname{Var}(XY) &amp;= \mathbb{E}[X^2]\mathbb{E}[Y^2] - \mathbb{E}[X]^2\mathbb{E}[Y]^2 \\
+\implies \operatorname{Var}(XY) &amp;= \operatorname{Var}(X)\operatorname{Var}(Y) + \operatorname{Var}(X)\mathbb{E}[Y]^2 + \operatorname{Var}(Y)\mathbb{E}[X]^2
+\end{align}
+\]</span> Now, say we have two vectors <span class="math inline">\(a\)</span> and <span class="math inline">\(b\)</span>, which each consist of <span class="math inline">\(n\)</span> i.i.d. random variables <span class="math inline">\(A_i\)</span> and <span class="math inline">\(B_i\)</span>, respectively: <span class="math display">\[
+\begin{align}
+a = [A_1,...,A_n]\\
+b = [B_1,...,B_n]
+\end{align}
+\]</span> Then the dot product of these vectors is: <span class="math display">\[
+a \cdot b = \sum a_i b_i
+\]</span> The variance of <span class="math inline">\(a \cdot b\)</span> follows from the fact that variance is additive for independent random variables. So, the variance of <span class="math inline">\(a \cdot b\)</span> is: <span class="math display">\[
+\begin{align}
+\operatorname{Var}(a \cdot b) &amp;= \operatorname{Var}(\sum a_i b_i)\\
+&amp;=\operatorname{Var}(A_1B_1) + Var(A_2B_2)+...+Var(A_nB_n)\\
+&amp;=n\operatorname{Var}(A_iB_i)
+\end{align}
+\]</span> That is, the variance of <span class="math inline">\(a \cdot b\)</span> is simply <span class="math inline">\(n\)</span> times the variance of <span class="math inline">\(AB\)</span>. With our assumption that <span class="math inline">\(Q \sim (0,1)\)</span> and <span class="math inline">\(K \sim (0,1)\)</span>, and our vector length is <span class="math inline">\(d_k\)</span>, the above variance formula simplifies considerably, as all expectation terms vanish as <span class="math inline">\(\mathbb{E}(X) = \mathbb{E}(Y) = 0\)</span>, and <span class="math inline">\(\operatorname{Var}(X) = \operatorname{Var}(Y) = 1\)</span>. <span class="math display">\[
+\operatorname{Var}(q \cdot k) = d_k\operatorname{Var}(Q_iK_i) = d_k
+\]</span> Now, we will be putting this entire expression <span class="math inline">\(QK^T/c\)</span> into our softmax function, where <span class="math inline">\(c\)</span> is the constant we divide by to scale. We want the variance of this entire expression, <strong>including the scalar</strong>, to be <span class="math inline">\(1\)</span>.</p>
+<p>Recall also that to pull a constant out of a variance function, it gets squared: <span class="math display">\[
+\begin{align}
+\operatorname{Var}(X) &amp;= \mathbb{E}(X^2) - \mathbb{E}(X)^2\\
+\implies \operatorname{Var}(aX) &amp;= \mathbb{E}((aX)^2) - \mathbb{E}(aX)^2\\
+&amp;= a^2\mathbb{E}(X^2) - a^2\mathbb{E}(X)^2\\
+&amp;= a^2\operatorname{Var}(X)
+\end{align}
+\]</span> So, in order to normalize, we need to scale by <span class="math inline">\(1/\sqrt{d_k}\)</span>, as this term will be squared when removed from the variance function.</p>
+</section>
+<section id="masking" class="level3">
+<h3 class="anchored" data-anchor-id="masking">Masking</h3>
+<p>Let’s think about what our task actually is as a concrete example. We have <span class="math inline">\(QK^T\)</span> which is an <span class="math inline">\(n \times n\)</span> matrix of relevance scores. We divide by <span class="math inline">\(\sqrt{d_k}\)</span> to keep the variance under control going into the <span class="math inline">\(\operatorname{softmax}\)</span>.</p>
+<p>Remember, we’re building a model that generates text left to right, one token at a time. However, when we train, we feed in a full sequence.</p>
+<p>Doing this allows the model to cheat: if we let token 5 attend to token 8 during training, we’re training a model on information it will never actually have, and it will learn to simply copy from the future rather than predict it.</p>
+<p>So we need to apply what’s called a causal mask: we need to hide future tokens from the model for training.</p>
+<p>We want to mask out the upper triangle of our <span class="math inline">\(n \times n\)</span> matrix, because this upper triangle contains information like <span class="math inline">\(C_{(1,5)}\)</span>, which is essentially saying “how much should token 1 as query pay attention to token 5 as key?” And the answer here should be none, because that would be cheating: we only want to pay attention to where the query token index is greater than our key token index.</p>
+<p>The way we do this is informed by the function we are about to pass it to: <span class="math inline">\(\operatorname{softmax}\)</span>. We will actually set this entire upper triangle to <code>-inf</code>, as <span class="math inline">\(\operatorname{softmax}\)</span> will actually zero out these <code>-inf</code> values in the next step.</p>
+</section>
+<section id="the-operatornamesoftmax" class="level3">
+<h3 class="anchored" data-anchor-id="the-operatornamesoftmax">The <span class="math inline">\(\operatorname{softmax}\)</span></h3>
+<p>Recall the softmax function: <span class="math display">\[
+\sigma(z)_i = \frac{e^{z_i}}{\sum_{j=1}^{K} e^{z_j}}
+\]</span> This function plays two critical roles: 1. It normalizes the vector it’s applied to into a probability distribution so that it sums to 1. 2. It further sharpens the vector, such that the higher values are heightened, and the lower values are depressed.</p>
+<p>Within our softmax function we have <span class="math inline">\(\frac{QK^T}{\sqrt{d_k}}\)</span>. This is still an <span class="math inline">\(n \times n\)</span> matrix, with the same interpretability as before: how relevant is the <span class="math inline">\(j\mathrm{th}\)</span> key to the <span class="math inline">\(i\mathrm{th}\)</span> query? The higher that dot product, the more relevant those tokens are to each other.</p>
+<p>What we want here is a <strong>row-wise</strong> <span class="math inline">\(\operatorname{softmax}\)</span>, which means we’ll be softmaxing keys <span class="math inline">\(k_i\)</span> for a particular query <span class="math inline">\(q_i\)</span>, making the output interpretable as “for every token as query, these are the keys we should be paying the most attention to”. Because of the masking, these will be only rearward looking. This allows our queries to do partial matches against multiple keys, and get back a weighted blend of the corresponding values.</p>
+</section>
+<section id="the-final-step-multiplying-by-v" class="level3">
+<h3 class="anchored" data-anchor-id="the-final-step-multiplying-by-v">The final step, multiplying by <span class="math inline">\(V\)</span></h3>
+<p>The final step is simple: we multiply the <span class="math inline">\(n \times n\)</span> matrix coming out of our <span class="math inline">\(\operatorname{softmax}\)</span> function by our <span class="math inline">\(n \times d_v\)</span> (i.e.&nbsp;<span class="math inline">\(n \times d_k\)</span>) values matrix <span class="math inline">\(V\)</span>.</p>
+<p>This is an intuitive move, if we accept the interpretation of the softmax output and the <span class="math inline">\(V\)</span> matrix itself. <span class="math inline">\(V\)</span> represents the actual content of each token: each row is a vector representation that is not optimized simply for increasing the dot product of related tokens, but rather for the actual content of the token itself. When we multiply our <span class="math inline">\(\operatorname{softmax}\)</span> output (which has told us that “it” is related to “creek” and “cold” but not related to “spunky”) by <span class="math inline">\(V\)</span>, we take the weighted blend from the <span class="math inline">\(\operatorname{softmax}\)</span> and apply it to our actual token value representations.</p>
+
+
+</section>
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

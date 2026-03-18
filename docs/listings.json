@@ -1,0 +1,14 @@
+[
+  {
+    "listing": "/posts/index.html",
+    "items": [
+      "/posts/scaled-dot-product-attention/index.html"
+    ]
+  },
+  {
+    "listing": "/index.html",
+    "items": [
+      "/posts/scaled-dot-product-attention/index.html"
+    ]
+  }
+]

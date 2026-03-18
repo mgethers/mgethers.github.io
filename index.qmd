@@ -1,7 +1,26 @@
 ---
 title: "Michael Gethers"
+listing:
+  id: writing-list
+  contents: "posts/*/index.qmd"
+  type: default
+  sort: "date desc"
+  fields: [date, title, description]
 ---
 
-This is a Quarto website.
+I'm an applied data scientist with 12 years of experience building data and 
+machine learning systems at production scale. My background is in statistics 
+at UC Berkeley, and my work has spanned the full range from statistical modeling 
+to production ML infrastructure, most recently including work at **McLaren Racing** and 
+in my current role at **Silent Push**.
 
-To learn more about Quarto websites visit <https://quarto.org/docs/websites>.
+I'm deepening my research foundation in transformers, reinforcement learning, 
+and agentic systems, with a focus on applications to sensor data and 
+infrastructure analysis. This site is where I write about what I'm building 
+and learning.
+
+---
+
+## Writing
+:::{#writing-list}
+:::
