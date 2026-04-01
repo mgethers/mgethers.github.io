@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.8.27">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="dcterms.date" content="2026-03-31">
+<meta name="description" content="How and why transformers learn multiple distinct attention subspaces simultaneously, with a full PyTorch implementation.">
+
+<title>Multi-Head Attention – Michael Gethers</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="../../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../../">
+<script src="../../site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="../../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="../../site_libs/quarto-html/axe/axe-check.js" type="module"></script>
+<script src="../../site_libs/quarto-html/popper.min.js"></script>
+<script src="../../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../../site_libs/quarto-html/quarto-syntax-highlighting-ed96de9b727972fe78a7b5d16c58bf87.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="../../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../../site_libs/bootstrap/bootstrap-5b4ad623e5705c0698d39aec6f10cf02.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+<link rel="stylesheet" href="../../styles.css">
+</head>
+
+<body class="nav-fixed quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container mx-auto">
+    <a class="navbar-brand" href="../../index.html">
+    <span class="navbar-title">Michael Gethers</span>
+    </a>
+  </div>
+            <div id="quarto-search" class="" title="Search"></div>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" role="menu" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+  <span class="navbar-toggler-icon"></span>
+</button>
+          <div class="collapse navbar-collapse" id="navbarCollapse">
+            <ul class="navbar-nav navbar-nav-scroll me-auto">
+  <li class="nav-item">
+    <a class="nav-link" href="../../index.html"> 
+<span class="menu-text">Home</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../../posts/index.html"> 
+<span class="menu-text">Writing</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../../about.html"> 
+<span class="menu-text">About</span></a>
+  </li>  
+</ul>
+          </div> <!-- /navcollapse -->
+            <div class="quarto-navbar-tools">
+</div>
+      </div> <!-- /container-fluid -->
+    </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#introduction" id="toc-introduction" class="nav-link active" data-scroll-target="#introduction">Introduction</a></li>
+  <li><a href="#the-intuition" id="toc-the-intuition" class="nav-link" data-scroll-target="#the-intuition">The intuition</a>
+  <ul class="collapse">
+  <li><a href="#limitations-of-a-single-head" id="toc-limitations-of-a-single-head" class="nav-link" data-scroll-target="#limitations-of-a-single-head">Limitations of a single head</a></li>
+  </ul></li>
+  <li><a href="#the-function" id="toc-the-function" class="nav-link" data-scroll-target="#the-function">The function</a>
+  <ul class="collapse">
+  <li><a href="#the-inputs-to-the-function" id="toc-the-inputs-to-the-function" class="nav-link" data-scroll-target="#the-inputs-to-the-function">The inputs to the function</a></li>
+  <li><a href="#linear-transformations" id="toc-linear-transformations" class="nav-link" data-scroll-target="#linear-transformations">Linear transformations</a></li>
+  <li><a href="#scaled-dot-product-attention" id="toc-scaled-dot-product-attention" class="nav-link" data-scroll-target="#scaled-dot-product-attention">Scaled dot-product attention</a></li>
+  <li><a href="#concatenation" id="toc-concatenation" class="nav-link" data-scroll-target="#concatenation">Concatenation</a></li>
+  <li><a href="#the-final-linear-projection-of-wo" id="toc-the-final-linear-projection-of-wo" class="nav-link" data-scroll-target="#the-final-linear-projection-of-wo">The final linear projection of <span class="math inline">\(W^O\)</span></a></li>
+  </ul></li>
+  <li><a href="#implementation" id="toc-implementation" class="nav-link" data-scroll-target="#implementation">Implementation</a>
+  <ul class="collapse">
+  <li><a href="#init__" id="toc-init__" class="nav-link" data-scroll-target="#init__"><code>__init__</code></a></li>
+  <li><a href="#forward" id="toc-forward" class="nav-link" data-scroll-target="#forward"><code>forward</code></a></li>
+  </ul></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Multi-Head Attention</h1>
+  <div class="quarto-categories">
+    <div class="quarto-category">transformers</div>
+    <div class="quarto-category">deep learning</div>
+    <div class="quarto-category">attention</div>
+    <div class="quarto-category">aiayn</div>
+  </div>
+  </div>
+
+<div>
+  <div class="description">
+    How and why transformers learn multiple distinct attention subspaces simultaneously, with a full PyTorch implementation.
+  </div>
+</div>
+
+
+<div class="quarto-title-meta">
+
+    
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">March 31, 2026</p>
+    </div>
+  </div>
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<p><em>Written by Michael Gethers</em></p>
+<section id="introduction" class="level2">
+<h2 class="anchored" data-anchor-id="introduction">Introduction</h2>
+<p>The purpose of this document is to detail the concepts behind and implementation of Multi-Head Attention.</p>
+<p>This is the second document of of a series that I am writing on the Attention Is All You Need (Vaswani et al., 2017) paper. The intent of this series is both to edify my own understanding of the paper’s core concepts, but to also help others to build a practical understanding of the hows and whys of transformer architecture.</p>
+<p>The first document in this series covered scaled dot-product attention. The reader is invited to refer to this document as needed, as multi-head attention depends upon scaled dot-product attention, which will not be covered at length here.</p>
+<p>Note that multi-head attention is applied to both the encoder and decoder of the Transformer. We will primarily be discussing the encoder in this document. The mechanics of multi-head attention are identical in the encoder and decoder, with the only difference being the inputs used.</p>
+</section>
+<section id="the-intuition" class="level2">
+<h2 class="anchored" data-anchor-id="the-intuition">The intuition</h2>
+<p>In the document on scaled dot-product attention, we discussed its general purpose, which is to allow the Transformer to learn how tokens in a sequence should influence each other given the context in which they are used.</p>
+<p>The purpose of multi-head attention is to take a the matrix of vector representations of a particular token sequence (which we’ll call <span class="math inline">\(X\)</span> in this writeup), and map those vector representations to <span class="math inline">\(n_{\mathrm{heads}}\)</span> different learned geometric subspaces that are optimized for different semantic relationships between tokens.</p>
+<p>Conceptually, what those <span class="math inline">\(n_{\mathrm{heads}}\)</span> represent are different learned ways of applying attention: one head may learn to focus on pronouns and their referents, one may learn to focus on noun/verb interactions, another may look for adjectives applied to nouns. The subspaces are optimized for these different comprehensive tasks.</p>
+<p>After passing through the attentional sublayers in these <span class="math inline">\(n_{\mathrm{heads}}\)</span>, the outputs are synthesized back into a single matrix, which now contains a richer reprentation of each token, built from the context of each the other tokens in the sequence.</p>
+<section id="limitations-of-a-single-head" class="level3">
+<h3 class="anchored" data-anchor-id="limitations-of-a-single-head">Limitations of a single head</h3>
+<p>A single attention head allows for the creation of a particular subspace for a particular attentional task.&nbsp; The query, key, and value matrices in that attentional head are optimized for that task, and the resulting subspaces are specifically tailored to it.</p>
+<p>But we have already identified many different tasks that an attention head could be learning (noun/verb interactions, etc.).&nbsp; The question is whether a single attention head could generalize to these different tasks.</p>
+<p>Let’s think about that in the context of our example sentence:</p>
+<pre><code>The creek was cold and the spunky dog wanted to jump over it.</code></pre>
+<p>Let’s look at the words “creek”, “cold”, and “it”, and examine them in context. There are two clauses in this sentence: “the creek was cold”, and “the spunky dog wanted to jump over it”.</p>
+<ul>
+<li>“creek”: subject of the first clause</li>
+<li>“cold”: adjective modifying “creek”</li>
+<li>“it”: object pronoun, referring to “creek”</li>
+</ul>
+<p>The words “cold” and “it” both have qualitatively different relationships to the word “creek”, but creek is fundamental to a contextual understanding of both of them. A single learned <span class="math inline">\(Q\)</span> matrix cannot simultaneously encode “I am a pronoun looking for my referent” and “I am an adjective looking for my noun” at the same time, because a single <span class="math inline">\(Q\)</span> matrix maps every token into one shared vector space where similarity means one thing. In order to maximize the dot-product of the query vectors of “cold” and “it” with the key vector of “creek”, it would require those query vectors themselves to be similar to each other, but they are different enough queries that forcing them into the same geometric region would corrupt both.</p>
+<p>This is the fundamental motivation behind multi-head attention: to allow the model to learn which types of relationships are most important for sequence comprehension, and create those separate subspaces where those relationships can be properly encoded.</p>
+</section>
+</section>
+<section id="the-function" class="level2">
+<h2 class="anchored" data-anchor-id="the-function">The function</h2>
+<p>The model can “decide” which subspaces it wants to create organically, and the number of heads, i.e.&nbsp;subspaces, to include is a parameter of the model.</p>
+<p>The process by which these subspaces are created is defined by the following multi-head attention function, which is taken directly from the paper:</p>
+<p><span class="math display">\[
+\begin{align}
+\mathrm{MultiHead}(Q, K, V) &amp;= \mathrm{Concat}(\mathrm{head}_1, ..., \mathrm{head}_h)W^O \\
+\text{where }\mathrm{head}_i &amp;= \mathrm{Attention(QW_{i}^{Q}, KW_{i}^{K}, VW_{i}^{V})}
+\end{align}
+\]</span> In the above, the linear projections are parameter matrices: <span class="math display">\[
+W_{i}^{Q} \in \mathbb{R}^{d_\mathrm{model} \times d_k}\\
+W_{i}^{K} \in \mathbb{R}^{d_\mathrm{model} \times d_k}\\
+W_{i}^{V} \in \mathbb{R}^{d_\mathrm{model} \times d_v}\\
+W^{O} \in \mathbb{R}^{hd_v \times d_\mathrm{model}}\\
+\]</span></p>
+<section id="the-inputs-to-the-function" class="level3">
+<h3 class="anchored" data-anchor-id="the-inputs-to-the-function">The inputs to the function</h3>
+<p>The multi-head attention function takes 3 separate inputs, <span class="math inline">\(Q\)</span>, <span class="math inline">\(K\)</span>, and <span class="math inline">\(V\)</span>.</p>
+<p>Functionally, however, in the encoder, <span class="math inline">\(Q\)</span>, <span class="math inline">\(K\)</span>, and <span class="math inline">\(V\)</span> are all the same <span class="math inline">\(T \times d_{\mathrm{model}}\)</span> matrix, where T is the number of tokens in the sequence, and <span class="math inline">\(d_{\mathrm{model}}\)</span> is a parameter of the model determining the size of the vectors that represent each token. <span class="math display">\[
+Q = K = V = X \in \mathbb{R}^{T \times d_{\mathrm{model}}}
+\]</span> This <span class="math inline">\(X\)</span> matrix has one row for every token in the sequence, and each row represents the learned vector representation of that token.</p>
+<p>As a dummy example, the <span class="math inline">\(X\)</span> matrix for our above sentence might look something like this: <span class="math display">\[
+\begin{array}{c|ccccccc}
+\text{token} &amp; d_1 &amp; d_2 &amp; d_3 &amp; d_4 &amp; d_5 &amp; d_6 &amp; \cdots &amp; d_{\mathrm{model}}  \\
+\hline
+\text{the}    &amp; 0.1 &amp; 0.0 &amp; 0.0 &amp; 0.2 &amp; 0.0 &amp; 0.1 &amp; \cdots &amp; 0.0 \\
+\text{creek}  &amp; 0.0 &amp; 0.2 &amp; 0.1 &amp; 0.0 &amp; 0.3 &amp; 0.5 &amp; \cdots &amp; 0.2 \\
+\text{was}    &amp; 0.1 &amp; 0.1 &amp; 0.0 &amp; 0.0 &amp; 0.0 &amp; 0.2 &amp; \cdots &amp; 0.1 \\
+\text{cold}   &amp; 0.0 &amp; 0.3 &amp; 0.2 &amp; 0.1 &amp; 0.0 &amp; 0.4 &amp; \cdots &amp; 0.2 \\
+\text{and}    &amp; 0.1 &amp; 0.0 &amp; 0.1 &amp; 0.0 &amp; 0.1 &amp; 0.0 &amp; \cdots &amp; 0.1 \\
+\text{the}    &amp; 0.1 &amp; 0.0 &amp; 0.0 &amp; 0.2 &amp; 0.0 &amp; 0.1 &amp; \cdots &amp; 0.0 \\
+\text{spunky} &amp; 0.2 &amp; 0.1 &amp; 0.3 &amp; 0.0 &amp; 0.2 &amp; 0.1 &amp; \cdots &amp; 0.0 \\
+\text{dog}    &amp; 0.3 &amp; 0.2 &amp; 0.1 &amp; 0.0 &amp; 0.1 &amp; 0.2 &amp; \cdots &amp; 0.1 \\
+\text{wanted} &amp; 0.0 &amp; 0.1 &amp; 0.2 &amp; 0.3 &amp; 0.1 &amp; 0.0 &amp; \cdots &amp; 0.2 \\
+\text{to}     &amp; 0.1 &amp; 0.0 &amp; 0.0 &amp; 0.1 &amp; 0.0 &amp; 0.1 &amp; \cdots &amp; 0.0 \\
+\text{jump}   &amp; 0.2 &amp; 0.3 &amp; 0.1 &amp; 0.0 &amp; 0.2 &amp; 0.1 &amp; \cdots &amp; 0.3 \\
+\text{over}   &amp; 0.0 &amp; 0.1 &amp; 0.2 &amp; 0.1 &amp; 0.3 &amp; 0.2 &amp; \cdots &amp; 0.1 \\
+\text{it}     &amp; 0.1 &amp; 0.2 &amp; 0.1 &amp; 0.0 &amp; 0.2 &amp; 0.3 &amp; \cdots &amp; 0.2 \\
+\end{array}
+\]</span></p>
+</section>
+<section id="linear-transformations" class="level3">
+<h3 class="anchored" data-anchor-id="linear-transformations">Linear transformations</h3>
+<p>This <span class="math inline">\(X\)</span> matrix gets linearly transformed <span class="math inline">\(h * 3 = 3h\)</span> different ways: once for each of <span class="math inline">\(Q\)</span>, <span class="math inline">\(K\)</span>, and <span class="math inline">\(V\)</span>, for each of the <span class="math inline">\(h\)</span> heads.</p>
+<p>This produces a Query matrix, a Key matrix, and Value matrix for all heads. This is the mechanism that allows for the creation of different geometric subspaces that encode different relationships between tokens in the text.</p>
+<p>The paper (and most ML literature) uses the simplified notation of <span class="math inline">\(XW_{i}^{X}\)</span> to signify these linear transformations. However, a linear transformation generally (though not necessarily) includes a bias term. The input matrix gets multiplied by a learned weight matrix <span class="math inline">\(W\)</span>, and then added to a bias matrix <span class="math inline">\(b\)</span>. In the first head, this would be represented like so: <span class="math display">\[
+XW_{1}^{X} + b_{1}^{X}\\
+\text{where } W_{1}^{X} \in \mathbb{R}^{d_\mathrm{model} \times d_k}\\
+\text{and } b_{1}^{X} \in \mathbb{R}^{d_k}\\
+\]</span></p>
+<p>Each of the <span class="math inline">\(3h\)</span> weight matrices has dimensions <span class="math inline">\(d_{\mathrm{model}} \times d_k\)</span>, so the resulting transformation is a projection of the input matrix from <span class="math inline">\(d_{\mathrm{model}}\)</span> space down to <span class="math inline">\(d_k\)</span> space.</p>
+<section id="on-dimensionality-reduction" class="level4">
+<h4 class="anchored" data-anchor-id="on-dimensionality-reduction">On dimensionality reduction</h4>
+<p>There is a legitimate question as to why this dimensionality reduction takes place at this stage. Another approach could reasonably have been to keep projections in <span class="math inline">\(d_{\mathrm{model}}\)</span> space, concatenate up to <span class="math inline">\(T \times hd_{\mathrm{model}}\)</span> and later use the <span class="math inline">\(W^O\)</span> transformation to project back down to <span class="math inline">\(d_{\mathrm{model}}\)</span> space.</p>
+<p>The reason for projecting down to <span class="math inline">\(d_k\)</span> at this stage is primarily computational efficiency, combined with empirical validation. Scaled dot-product attention costs <span class="math inline">\(O(T^2 \cdot d_k)\)</span>, which gets computed for every head. If each head operated in <span class="math inline">\(d_{\mathrm{model}}\)</span> dimensions instead of <span class="math inline">\(d_k\)</span>, that cost becomes <span class="math inline">\(O(T^2 \cdot d_{\mathrm{model}})\)</span>, and we’ve multiplied our compute by <span class="math inline">\(h\)</span> with no architectural benefit.</p>
+<p>Additionally, there is a parameter count argument. By projecting from <span class="math inline">\(d_{\mathrm{model}}\)</span> to <span class="math inline">\(d_k\)</span>, we have: <span class="math inline">\(3*h*d_{\mathrm{model}}*d_k\)</span> projection parameters before scaled dot-product attention, and <span class="math inline">\(d_{\mathrm{model}} * d_{\mathrm{model}}\)</span> projection parameters in <span class="math inline">\(W^O\)</span>.</p>
+<p>With <span class="math inline">\(d_k = d_{\mathrm{model}}/h\)</span>, that becomes: <span class="math display">\[
+\begin{align}
+&amp;= 3*h*d_{\mathrm{model}}*d_k + d_{\mathrm{model}} * d_{\mathrm{model}}\\
+&amp;= 3*h*d_{\mathrm{model}}*\frac{d_{\mathrm{model}}}{h} + d_{\mathrm{model}}^{2}\\
+&amp;= 3d_{\mathrm{model}}^2 + d_{\mathrm{model}}^2 \\
+&amp;= 4d_{\mathrm{model}}^2
+\end{align}
+\]</span></p>
+<p>Notably, our parameter count is <em>not a function of <span class="math inline">\(h\)</span></em>. If we did not reduce dimensionality (so <span class="math inline">\(d_k = d_{\mathrm{model}}\)</span>, and <span class="math inline">\(W^O\)</span> is <span class="math inline">\(hd_{\mathrm{model}} \times d_{\mathrm{model}}\)</span>), that becomes: <span class="math display">\[
+\begin{align}
+&amp;= 3*h*d_{\mathrm{model}}*d_k + hd_{\mathrm{model}} * d_{\mathrm{model}} \\
+&amp;= 3*h*d_{\mathrm{model}}*d_{\mathrm{model}} + hd_{\mathrm{model}} * d_{\mathrm{model}} \\
+&amp;= 3hd_{\mathrm{model}}^2 + hd_{\mathrm{model}}^2\\
+&amp;= 4hd_{\mathrm{model}}^2\\
+\end{align}
+\]</span> Without the reduction in dimensionality, the total parameter count for projections would increase linearly with <span class="math inline">\(h\)</span>.</p>
+<p>Nevertheless, it is worth noting that the dimensionality reduction is a design choice with a computational motivation, not a mathematical necessity.</p>
+</section>
+</section>
+<section id="scaled-dot-product-attention" class="level3">
+<h3 class="anchored" data-anchor-id="scaled-dot-product-attention">Scaled dot-product attention</h3>
+<p>After these initial <span class="math inline">\(3h\)</span> linear projections down to <span class="math inline">\(d_k\)</span> dimensions, we apply scaled dot-product attention to each of our <span class="math inline">\(h\)</span> heads, which each have their own <span class="math inline">\(Q\)</span>, <span class="math inline">\(K\)</span>, and <span class="math inline">\(V\)</span> matrices.</p>
+<p><span class="math display">\[
+\mathrm{Attention}(Q, K, V) = \mathrm{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V
+\]</span></p>
+<p>The mechanics of scaled dot-product attention have been covered at length already in this series, so I’ll not cover it extensively here.</p>
+<p>But this is the mechanism by which the Transformer applies its learned understanding of how each token in the sequence contributes to the understanding of each other token, and the understanding of the sequence as a whole.</p>
+</section>
+<section id="concatenation" class="level3">
+<h3 class="anchored" data-anchor-id="concatenation">Concatenation</h3>
+<p>The output of scaled dot-product attention at every head is a single <span class="math inline">\(T \times d_k\)</span> matrix representing a weighted blend of each token’s contextual meaning (represented as a vector of length <span class="math inline">\(d_k\)</span>).</p>
+<p>These <span class="math inline">\(h\)</span> matrices are concatenated column-wise, which results in a single <span class="math inline">\(T \times hd_k = T \times d_{\mathrm{model}}\)</span> matrix that contains the output of all heads.</p>
+</section>
+<section id="the-final-linear-projection-of-wo" class="level3">
+<h3 class="anchored" data-anchor-id="the-final-linear-projection-of-wo">The final linear projection of <span class="math inline">\(W^O\)</span></h3>
+<p>After attention is applied to each head, and the outputs are concatenated into a single <span class="math inline">\(T \times d_{\mathrm{model}}\)</span> matrix, we have a matrix that contains information from every head, and contains within it meaningful information about what the tokens and the sequence as a whole mean in context.</p>
+<p>But after concatenation, that information is currently contained in relative isolation: yes it exists within the same matrix, but the different heads have not had any ability to inform <em>each other</em> about what they know of the tokens’ contextual meaning.</p>
+<p>This is where we apply our final linear transformation in multi-head attention: the multiplication of our concatenated <span class="math inline">\(T \times d_{\mathrm{model}}\)</span> matrix by the learned <span class="math inline">\(d_{\mathrm{model}} \times d_{\mathrm{model}}\)</span> <span class="math inline">\(W^O\)</span> matrix.</p>
+<p>This final transformation is the “mixing matrix” that allows the model to combine signals across heads into a single unified representation. Each output token’s final vector can now reflect coreference information, syntactic relationships, and whatever the other heads learned, simultaneously, in a single <span class="math inline">\(d_{\mathrm{model}}\)</span> vector.</p>
+</section>
+</section>
+<section id="implementation" class="level2">
+<h2 class="anchored" data-anchor-id="implementation">Implementation</h2>
+<p>We can implement multi-head attention using PyTorch as follows:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> torch.nn <span class="im">as</span> nn</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> MultiHeadAttention(nn.Module):</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, d_model<span class="op">=</span><span class="dv">512</span>, n_heads<span class="op">=</span><span class="dv">8</span>):</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>        <span class="bu">super</span>().<span class="fu">__init__</span>()</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>        <span class="co">## Static components</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.d_model <span class="op">=</span> d_model</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.n_heads <span class="op">=</span> n_heads</span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.d_k <span class="op">=</span> <span class="bu">int</span>(d_model<span class="op">/</span>n_heads)</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>        <span class="co">## Learnable components</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.w_q <span class="op">=</span> nn.Linear(<span class="va">self</span>.d_model, <span class="va">self</span>.d_model)</span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.w_k <span class="op">=</span> nn.Linear(<span class="va">self</span>.d_model, <span class="va">self</span>.d_model)</span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.w_v <span class="op">=</span> nn.Linear(<span class="va">self</span>.d_model, <span class="va">self</span>.d_model)</span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.w_o <span class="op">=</span> nn.Linear(<span class="va">self</span>.d_model, <span class="va">self</span>.d_model)</span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> forward(<span class="va">self</span>, X, mask<span class="op">=</span><span class="va">None</span>):</span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>        <span class="co">'''</span></span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a><span class="co">        X can have any dimensions, so long as the final dimension matches the </span></span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a><span class="co">        in_features used in nn.Linear (in this case, that is d_model)</span></span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a><span class="co">        '''</span></span>
+<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a>        B <span class="op">=</span> X.shape[<span class="dv">0</span>]</span>
+<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a>        T <span class="op">=</span> X.shape[<span class="op">-</span><span class="dv">2</span>]</span>
+<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb2-26"><a href="#cb2-26" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Start with the d_model x d_model transform</span></span>
+<span id="cb2-27"><a href="#cb2-27" aria-hidden="true" tabindex="-1"></a>        q_full <span class="op">=</span> <span class="va">self</span>.w_q(X)</span>
+<span id="cb2-28"><a href="#cb2-28" aria-hidden="true" tabindex="-1"></a>        k_full <span class="op">=</span> <span class="va">self</span>.w_k(X)</span>
+<span id="cb2-29"><a href="#cb2-29" aria-hidden="true" tabindex="-1"></a>        v_full <span class="op">=</span> <span class="va">self</span>.w_v(X)</span>
+<span id="cb2-30"><a href="#cb2-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-31"><a href="#cb2-31" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Now reshape to spread those out over n_heads</span></span>
+<span id="cb2-32"><a href="#cb2-32" aria-hidden="true" tabindex="-1"></a>        q <span class="op">=</span> q_full.view(B, T, <span class="va">self</span>.n_heads, <span class="va">self</span>.d_k).permute(<span class="dv">0</span>,<span class="dv">2</span>,<span class="dv">1</span>,<span class="dv">3</span>)</span>
+<span id="cb2-33"><a href="#cb2-33" aria-hidden="true" tabindex="-1"></a>        k <span class="op">=</span> k_full.view(B, T, <span class="va">self</span>.n_heads, <span class="va">self</span>.d_k).permute(<span class="dv">0</span>,<span class="dv">2</span>,<span class="dv">1</span>,<span class="dv">3</span>)</span>
+<span id="cb2-34"><a href="#cb2-34" aria-hidden="true" tabindex="-1"></a>        v <span class="op">=</span> v_full.view(B, T, <span class="va">self</span>.n_heads, <span class="va">self</span>.d_k).permute(<span class="dv">0</span>,<span class="dv">2</span>,<span class="dv">1</span>,<span class="dv">3</span>)</span>
+<span id="cb2-35"><a href="#cb2-35" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-36"><a href="#cb2-36" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Now do scaled dot product attention</span></span>
+<span id="cb2-37"><a href="#cb2-37" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="bu">isinstance</span>(mask, torch.Tensor):</span>
+<span id="cb2-38"><a href="#cb2-38" aria-hidden="true" tabindex="-1"></a>            mask <span class="op">=</span> mask.unsqueeze(<span class="dv">1</span>)</span>
+<span id="cb2-39"><a href="#cb2-39" aria-hidden="true" tabindex="-1"></a>        sdpa <span class="op">=</span> scaled_dot_product_attention(q, k, v, mask<span class="op">=</span>mask)</span>
+<span id="cb2-40"><a href="#cb2-40" aria-hidden="true" tabindex="-1"></a>                </span>
+<span id="cb2-41"><a href="#cb2-41" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Now concatenate</span></span>
+<span id="cb2-42"><a href="#cb2-42" aria-hidden="true" tabindex="-1"></a>        concat <span class="op">=</span> sdpa.permute(<span class="dv">0</span>,<span class="dv">2</span>,<span class="dv">1</span>,<span class="dv">3</span>).reshape(B, T, <span class="va">self</span>.d_model)</span>
+<span id="cb2-43"><a href="#cb2-43" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-44"><a href="#cb2-44" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Apply the final transform with w_o</span></span>
+<span id="cb2-45"><a href="#cb2-45" aria-hidden="true" tabindex="-1"></a>        output <span class="op">=</span> <span class="va">self</span>.w_o(concat)</span>
+<span id="cb2-46"><a href="#cb2-46" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb2-47"><a href="#cb2-47" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> output</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Where <code>scaled_dot_product_attention()</code> is the function defined in our scaled dot-product implementation writeup.</p>
+<p>We’re going to walk through this implementation line by line, as there are some interesting and non-obvious elements that are worth explaining in more detail.</p>
+<section id="init__" class="level3">
+<h3 class="anchored" data-anchor-id="init__"><code>__init__</code></h3>
+<p>Before doing anything in our <code>__init__</code> function, recognize that <code>MultiHeadAttention</code> is a subclass of <code>nn.Module</code>. As such, immediately call <code>super().__init__()</code> to initialize the parent class, ensuring that <code>nn.Module</code>’s internal state is properly set up within our new object.</p>
+<section id="static-components" class="level4">
+<h4 class="anchored" data-anchor-id="static-components">Static components</h4>
+<p>Our <code>MultiHeadAttention</code> class will take two arguments upon initialization: <code>d_model</code> (<span class="math inline">\(d_{\mathrm{model}}\)</span>) and <code>n_heads</code> (<span class="math inline">\(h\)</span>). We give these defaults of <code>512</code> and <code>8</code> respectively, to match the Transformer paper.</p>
+<p>These are static values, and we simply save them as attributes of our class:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co">## Static components</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="va">self</span>.d_model <span class="op">=</span> d_model</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="va">self</span>.n_heads <span class="op">=</span> n_heads</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="va">self</span>.d_k <span class="op">=</span> <span class="bu">int</span>(d_model<span class="op">/</span>n_heads)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Note that we are also defining <code>self.d_k</code> here, which is simply <code>d_model/n_heads</code>, as previously discussed.</p>
+</section>
+<section id="learnable-components" class="level4">
+<h4 class="anchored" data-anchor-id="learnable-components">Learnable components</h4>
+<p>Now, let’s look at our learnable components:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co">## Learnable components</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="va">self</span>.w_q <span class="op">=</span> nn.Linear(<span class="va">self</span>.d_model, <span class="va">self</span>.d_model)</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="va">self</span>.w_k <span class="op">=</span> nn.Linear(<span class="va">self</span>.d_model, <span class="va">self</span>.d_model)</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="va">self</span>.w_v <span class="op">=</span> nn.Linear(<span class="va">self</span>.d_model, <span class="va">self</span>.d_model)</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="va">self</span>.w_o <span class="op">=</span> nn.Linear(<span class="va">self</span>.d_model, <span class="va">self</span>.d_model)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>We have defined four weight matrices here, one for <span class="math inline">\(W^Q\)</span>, <span class="math inline">\(W^K\)</span>, and <span class="math inline">\(W^V\)</span>, and then our final <span class="math inline">\(W^O\)</span> mixing matrix. But looking closely at these definitions, they do not immediately appear to map to the dimensions we outlined above. We expect our <span class="math inline">\(W^Q\)</span>, <span class="math inline">\(W^K\)</span>, and <span class="math inline">\(W^V\)</span> matrices to project our <span class="math inline">\(T \times d_{\mathrm{model}}\)</span> matrix <span class="math inline">\(X\)</span> down from <span class="math inline">\(d_{\mathrm{model}}\)</span> dimensions down to <span class="math inline">\(d_k\)</span>. <strong>So why are these linear transformations all <span class="math inline">\(d_{\mathrm{model}}\)</span> to <span class="math inline">\(d_{\mathrm{model}}\)</span>?</strong></p>
+<p>Recall that we intend to have <span class="math inline">\(h\)</span> distinct <span class="math inline">\(W^Q\)</span>, <span class="math inline">\(W^K\)</span>, and <span class="math inline">\(W^V\)</span> matrices, each <span class="math inline">\(T \times d_k\)</span>. To do this directly, we would need to register <span class="math inline">\(h * 3\)</span> different transformations just for our initial linear projections, and we would have to do this dynamically to respond to the user’s input for <span class="math inline">\(h\)</span>.</p>
+<p>But this is messy and computationally inefficient, and there is a much cleaner way to do it.</p>
+<p>Instead of registering <span class="math inline">\(h\)</span> different transformations for each of <span class="math inline">\(Q\)</span>, <span class="math inline">\(K\)</span>, and <span class="math inline">\(V\)</span>, recognize that by our definition of <span class="math inline">\(d_k\)</span>, it is simply <span class="math inline">\(d_{\mathrm{model}} / h\)</span>, which is to say that a single <span class="math inline">\(T \times d_{\mathrm{model}}\)</span> matrix contains the exact same number of parameters as a <span class="math inline">\(h\)</span> distinct <span class="math inline">\(T \times d_k\)</span> matrices.</p>
+<p>Using that insight, for each of <span class="math inline">\(Q\)</span>, <span class="math inline">\(K\)</span>, and <span class="math inline">\(V\)</span>, we can create a single <span class="math inline">\(T \times d_{\mathrm{model}}\)</span> matrix, and simply reshape it to <span class="math inline">\(h \times T \times d_k\)</span> in our forward pass, effectively creating the <span class="math inline">\(h\)</span> different <span class="math inline">\(T \times d_k\)</span> matrices, just in a cleaner and more efficient manner. This transformation occurs in our <code>MultiHeadAttention.forward</code> function, which we will discuss next.</p>
+</section>
+</section>
+<section id="forward" class="level3">
+<h3 class="anchored" data-anchor-id="forward"><code>forward</code></h3>
+<p>You’ll notice that in the very first line of our <code>forward</code> function, we define <code>B</code>. <code>B</code> is our batch variable: it defines the number of sequences we train our model on concurrently. It is used strictly for computational efficiency, but it is not at all fundamental to the way multi-head attention works, and can make the core concepts slightly more difficult to understand. For now, we will omit <code>B</code>, and add it back in as a final step at the end.</p>
+<p><code>T</code> is the number of tokens in our input sequence, and is the number of rows in our input matrix. It can be obtained simply by taking the second-to-last dimension of <code>X</code>:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>T <span class="op">=</span> X.shape[<span class="op">-</span><span class="dv">2</span>]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Note that without batching, this would be equivalent to <code>T = X.shape[0]</code>, however when we include batching later, it would be <code>T = X.shape[1]</code>. For this reason, we simply use <code>-2</code> as our shape index, which is correct in either case.</p>
+<section id="initial-d_mathrmmodel-times-d_mathrmmodel-transforms" class="level4">
+<h4 class="anchored" data-anchor-id="initial-d_mathrmmodel-times-d_mathrmmodel-transforms">Initial <span class="math inline">\(d_{\mathrm{model}} \times d_{\mathrm{model}}\)</span> transforms</h4>
+<p>We first perform our transformations from <span class="math inline">\(d_{\mathrm{model}}\)</span> space to <span class="math inline">\(d_{\mathrm{model}}\)</span> space. As discussed above, this is done for tidiness and efficiency, and it is an equivalent transformation to the <span class="math inline">\(h\)</span> distinct transformations of <span class="math inline">\(X\)</span> as outlined in the paper.</p>
+<p>This is transformations are performed via a call to the <code>self.w_q</code>, <code>self.w_k</code>, and <code>self.w_v</code> <code>nn.Linear</code> classes we defined in initialization:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>q_full <span class="op">=</span> <span class="va">self</span>.w_q(X)</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>k_full <span class="op">=</span> <span class="va">self</span>.w_k(X)</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>v_full <span class="op">=</span> <span class="va">self</span>.w_v(X)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+<section id="reshaping-to-h-times-t-times-d_k" class="level4">
+<h4 class="anchored" data-anchor-id="reshaping-to-h-times-t-times-d_k">Reshaping to <span class="math inline">\(h \times T \times d_k\)</span></h4>
+<p>Conceptually, reshaping our three <span class="math inline">\(T \times d_{\mathrm{model}}\)</span> matrices into three <span class="math inline">\(h \times T \times d_k\)</span> matrices is quite simple. We want to split our matrix up into <span class="math inline">\(h\)</span> sections column-wise, where each section contains <span class="math inline">\(d_k\)</span> columns, and use each of those <span class="math inline">\(T \times d_k\)</span> matrices as the inputs to our <span class="math inline">\(h\)</span> heads.</p>
+<p>This ends up being a very simple reshape in PyTorch as well, but it does require some understanding of how reshaping works in PyTorch.</p>
+<p>Ultimately, the reshape is done like this:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Now reshape to spread those out over n_heads</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>q <span class="op">=</span> q_full.view(T, <span class="va">self</span>.n_heads, <span class="va">self</span>.d_k).permute(<span class="dv">1</span>,<span class="dv">0</span>,<span class="dv">2</span>)</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>k <span class="op">=</span> k_full.view(T, <span class="va">self</span>.n_heads, <span class="va">self</span>.d_k).permute(<span class="dv">1</span>,<span class="dv">0</span>,<span class="dv">2</span>)</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>v <span class="op">=</span> v_full.view(T, <span class="va">self</span>.n_heads, <span class="va">self</span>.d_k).permute(<span class="dv">1</span>,<span class="dv">0</span>,<span class="dv">2</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>I’ve used a <code>view</code> + <code>permute</code> approach here. This solution is clean and efficient, and I’ve written a separate document (<a href="../../posts/mechanics-of-reshaping-in-multi-head-attention">The Mechanics of Reshaping in Multi-Head Attention</a>) which outlines exactly how this two-step solution works. I would highly encourage you do read through this document if rationale behind this transformation is not self-evident, as it gets into the weeds of how PyTorch stores data and what views/reshapes are actually doing in practice.</p>
+<p>Otherwise, we proceed from here to scaled dot-product attention.</p>
+</section>
+<section id="performing-scaled-dot-product-attention" class="level4">
+<h4 class="anchored" data-anchor-id="performing-scaled-dot-product-attention">Performing scaled dot product attention</h4>
+<p>Now that we have our <span class="math inline">\(Q\)</span>, <span class="math inline">\(K\)</span>, and <span class="math inline">\(V\)</span> input matrices, each in the shape of <span class="math inline">\((h, T, d_k)\)</span>, we can pass them into the scaled dot product attention function we created previously, which looks like this:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> scaled_dot_product_attention(Q, K, V, mask<span class="op">=</span><span class="va">None</span>):</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">'''</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="co">    Q: torch.tensor() with shape T x d_k</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="co">    K: torch.tensor() with shape T x d_k</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="co">    V: torch.tensor() with shape T x d_v</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a><span class="co">    mask: T x T mask or None</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a><span class="co">    '''</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>    d_k <span class="op">=</span> Q.shape[<span class="op">-</span><span class="dv">1</span>]</span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>    C <span class="op">=</span> Q <span class="op">@</span> K.transpose(<span class="op">-</span><span class="dv">1</span>, <span class="op">-</span><span class="dv">2</span>)         </span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>    divisor <span class="op">=</span> math.sqrt(d_k)            </span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>    scaled <span class="op">=</span> C <span class="op">/</span> divisor</span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>    C_masked <span class="op">=</span> scaled</span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="bu">isinstance</span>(mask, torch.Tensor):</span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a>        C_masked <span class="op">=</span> scaled.masked_fill(mask, <span class="bu">float</span>(<span class="st">'-inf'</span>))</span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>    softmaxed <span class="op">=</span> torch.softmax(C_masked, dim<span class="op">=-</span><span class="dv">1</span>)</span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a>    final <span class="op">=</span> softmaxed <span class="op">@</span> V</span>
+<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> final</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>We pass our <code>q</code>, <code>k</code>, and <code>v</code> variables in directly as arguments:</p>
+<pre><code>sdpa = scaled_dot_product_attention(q, k, v)</code></pre>
+<p>The result, <code>sdpa</code>, is an <span class="math inline">\(h \times T \times d_k\)</span> tensor.</p>
+</section>
+<section id="concatenation-1" class="level4">
+<h4 class="anchored" data-anchor-id="concatenation-1">Concatenation</h4>
+<p>We now reassemble the output of our attention heads into a single <span class="math inline">\(T \times d_{\mathrm{model}}\)</span> matrix:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>concat <span class="op">=</span> sdpa.permute(<span class="dv">1</span>,<span class="dv">0</span>,<span class="dv">2</span>).reshape(T, <span class="va">self</span>.d_model)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>That this uses the same concept we used to split our <span class="math inline">\(T \times d_{\mathrm{model}}\)</span> into heads, but in reverse. We recognize that we have an <span class="math inline">\(h \times T \times d_k\)</span> tensor. If we were to reshape directly into <span class="math inline">\(T \times d_{\mathrm{model}}\)</span> (i.e.&nbsp;without the permute), the first row of our concatenated matrix would be the first <span class="math inline">\(d_{\mathrm{model}}\)</span> elements in our <code>sdpa</code> tensor’s memory, which is the first <span class="math inline">\(d_{\mathrm{model}}\)</span> elements of our first output head. This is not what we need.</p>
+<p>Instead, we want to reorder our <code>sdpa</code> output so that it has shape <span class="math inline">\(T \times h \times d_k\)</span> (exactly the opposite reordering we did previously). When this is made contiguous, our elements will be in the right order for our final reshape: our first row will be the first <span class="math inline">\(d_{\mathrm{model}}\)</span> elements of this new shape, which will be exactly the first matrix of our permuted <code>sdpa</code> tensor. That is to say, after <code>permute(1,0,2)</code>, we have shape <span class="math inline">\((T, h, d_k)\)</span>, so the first row of the reshape corresponds to the first token’s output across all heads, concatenated.</p>
+<p>Note that as we’ve discussed previously, reshaping with <code>view</code> requires contiguity. <code>sdpa.permute(1,0,2)</code> breaks contiguity, so we need to call <code>.contiguous()</code> before we can reshape with <code>view</code>. The <code>reshape</code> function is simply shorthand for this exact sequence of actions: it calls <code>.contiguous()</code>, and then calls <code>view</code> with the desired parameters in a single, more convenient function.</p>
+</section>
+<section id="final-linear-transform-with-wo" class="level4">
+<h4 class="anchored" data-anchor-id="final-linear-transform-with-wo">Final linear transform with <span class="math inline">\(W^O\)</span></h4>
+<p>The final step is the to make the final “mixing” transformation using <span class="math inline">\(d_{\mathrm{model}} \times d_{\mathrm{model}}\)</span> weight matrix <span class="math inline">\(W^O\)</span>. This is done via a simple call to our <code>nn.Linear</code> object <code>self.w_o</code>:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>output <span class="op">=</span> <span class="va">self</span>.w_o(concat)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+<section id="adding-batches-b-back-in" class="level4">
+<h4 class="anchored" data-anchor-id="adding-batches-b-back-in">Adding batches <code>B</code> back in</h4>
+<p>The Transformer is generally trained in batches. In order to do this, we must add a batch dimension to our <code>forward</code> function. Instead of <span class="math inline">\(T \times d_{\mathrm{model}}\)</span>, the shape of our output will be <span class="math inline">\(B \times T \times d_{\mathrm{model}}\)</span>. This dimension <span class="math inline">\(B\)</span> will be a part of our input matrix <span class="math inline">\(X\)</span>, and will get be carried throughout every step of the the logic.</p>
+<p>In this sense, it is a very simple change to make: we don’t need to change any core logic, we just need to make sure to 1) extract <span class="math inline">\(B\)</span> from the input matrix, and 2) include it in all of our reshapes and permutations:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>B <span class="op">=</span> X.shape[<span class="dv">0</span>]</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>T <span class="op">=</span> X.shape[<span class="op">-</span><span class="dv">2</span>]</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Start with the d_model x d_model transform</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>q_full <span class="op">=</span> <span class="va">self</span>.w_q(X)</span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>k_full <span class="op">=</span> <span class="va">self</span>.w_k(X)</span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>v_full <span class="op">=</span> <span class="va">self</span>.w_v(X)</span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a><span class="co"># Now reshape to spread those out over n_heads</span></span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>q <span class="op">=</span> q_full.view(B, T, <span class="va">self</span>.n_heads, <span class="va">self</span>.d_k).permute(<span class="dv">0</span>,<span class="dv">2</span>,<span class="dv">1</span>,<span class="dv">3</span>)</span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>k <span class="op">=</span> k_full.view(B, T, <span class="va">self</span>.n_heads, <span class="va">self</span>.d_k).permute(<span class="dv">0</span>,<span class="dv">2</span>,<span class="dv">1</span>,<span class="dv">3</span>)</span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>v <span class="op">=</span> v_full.view(B, T, <span class="va">self</span>.n_heads, <span class="va">self</span>.d_k).permute(<span class="dv">0</span>,<span class="dv">2</span>,<span class="dv">1</span>,<span class="dv">3</span>)</span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a><span class="co"># Now do scaled dot product attention</span></span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a>sdpa <span class="op">=</span> scaled_dot_product_attention(q, k, v) <span class="co"># will this work with the added dimension of heads?</span></span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a><span class="co"># Now concatenate</span></span>
+<span id="cb12-18"><a href="#cb12-18" aria-hidden="true" tabindex="-1"></a>concat <span class="op">=</span> sdpa.permute(<span class="dv">0</span>,<span class="dv">2</span>,<span class="dv">1</span>,<span class="dv">3</span>).reshape(B, T, <span class="va">self</span>.d_model)</span>
+<span id="cb12-19"><a href="#cb12-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-20"><a href="#cb12-20" aria-hidden="true" tabindex="-1"></a><span class="co"># Apply the final transform with w_o</span></span>
+<span id="cb12-21"><a href="#cb12-21" aria-hidden="true" tabindex="-1"></a>output <span class="op">=</span> <span class="va">self</span>.w_o(concat)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+<section id="masking" class="level4">
+<h4 class="anchored" data-anchor-id="masking">Masking</h4>
+<p>The final step is to include masking. The causal mask depends only on <span class="math inline">\(T\)</span>, so in theory it could be constructed inside <code>forward</code>. But the padding mask depends on the actual length of each sequence, which is only known at the data pipeline level (i.e.&nbsp;when we’re tokenizing and batching). Instead of constructing the mask within <code>MultiHeadAttention</code>, the design is cleaner if we construct it alongside our input matrix <span class="math inline">\(X\)</span>.</p>
+<p>So for the purpose of our <code>forward</code> function, all we’re going to do is accept <code>mask</code> as an optional variable, add the <code>h</code> dimension do it, and pass that directly into <code>scaled_dot_product_attention</code>:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="bu">isinstance</span>(mask, torch.Tensor):</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>    mask <span class="op">=</span> mask.unsqueeze(<span class="dv">1</span>)</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>sdpa <span class="op">=</span> scaled_dot_product_attention(q, k, v, mask<span class="op">=</span>mask)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>The purpose of masking is twofold. First and most crucially, it stops the model from learning from future tokens while it is training (this is called the causal mask and is applied to the <strong>decoder only</strong>; the encoder uses full bidirectional attention, meaning every token can attend to every other token). Secondly, it facilitates batching by enabling sequences of varying lengths to be passed through the model simultaneously (this mask is applied to both encoder and decoder during training). Recall that scaled dot product attention first performs a matrix multiplication of <span class="math inline">\(Q\)</span> and <span class="math inline">\(K^T\)</span>, and then scales it by <span class="math inline">\(\sqrt{d_k}\)</span>. What we have at this point is a <span class="math inline">\(T \times T\)</span> matrix representing the dot products of each query and key vector.</p>
+<p>While we’ve primarily discussed the encoder to this point, I’ll include detail on the causal mask here, which, as noted, is only used in the decoder. But it’s simple to achieve the first objective: we simply mask out the upper triangle of the <span class="math inline">\(T \times T\)</span> matrix, by setting each of those values by <code>-inf</code> (as they are then run through a softmax function, which is <code>0</code> at <code>-inf</code>). Any elements in the upper triangle represent keys that the given query should not yet have access to, as they appear later in the sequence. For example, for the sequence “this is a sample sequence”:</p>
+<p><span class="math display">\[
+\begin{array}{r|ccccc}
+\text{Q} \downarrow \, / \, \text{K} \rightarrow &amp; \text{this} &amp; \text{is} &amp; \text{a} &amp; \text{sample} &amp; \text{sequence} \\
+\hline
+\text{this}     &amp; 1 &amp; -\infty &amp; -\infty &amp; -\infty &amp; -\infty \\
+\text{is}       &amp; 1 &amp; 1 &amp; -\infty &amp; -\infty &amp; -\infty \\
+\text{a}        &amp; 1 &amp; 1 &amp; 1 &amp; -\infty &amp; -\infty \\
+\text{sample}   &amp; 1 &amp; 1 &amp; 1 &amp; 1 &amp; -\infty \\
+\text{sequence} &amp; 1 &amp; 1 &amp; 1 &amp; 1 &amp; 1 \\
+\end{array}
+\]</span> <em>Note: cells shown as 1 represent arbitrary (non-zero) attention scores for illustration. The actual values are the entries of <span class="math inline">\(QK^T / \sqrt{d_k}\)</span>.</em></p>
+<p>The second objective is slightly more nuanced, because the same mask cannot be applied to every sequence. Every batch will contain sequences of varying length, and <span class="math inline">\(T\)</span> will be defined as the length of the longest sequence in the batch. Say our sample sequence above, which is length 5, is in a batch where the longest sequence is length 7. <span class="math inline">\(T = 7\)</span> in this case, and therefore our sequence needs to be represented as length 7.</p>
+<p>In order to do this, we use “padding tokens”, which are essentially meaningless tokens that are meant to extend shorter sequences up to the required length <span class="math inline">\(T\)</span> for their batch. In our case, our sequence would become “this is a sample sequence &lt;pad&gt; &lt;pad&gt;”.</p>
+<p>This necessarily alters our mask too: just as we don’t want future tokens to inform the training of the Transformer, we do not want padding tokens to inform it either: they are meaningless tokens, strictly present to make batch computation possible.</p>
+<p>So to incorporate both the upper triangle masking and the padding token masking, the mask that ends up getting passed will produce this result: <span class="math display">\[
+\begin{array}{r|ccccccc}
+\text{Q} \downarrow \, / \, \text{K} \rightarrow &amp; \text{this} &amp; \text{is} &amp; \text{a} &amp; \text{sample} &amp; \text{sequence} &amp; \text{&lt;pad&gt;} &amp; \text{&lt;pad&gt;}\\
+\hline
+\text{this}     &amp; 1 &amp; -\infty &amp; -\infty &amp; -\infty &amp; -\infty &amp; -\infty &amp; -\infty\\
+\text{is}       &amp; 1 &amp; 1 &amp; -\infty &amp; -\infty &amp; -\infty &amp; -\infty &amp; -\infty\\
+\text{a}        &amp; 1 &amp; 1 &amp; 1 &amp; -\infty &amp; -\infty &amp; -\infty &amp; -\infty\\
+\text{sample}   &amp; 1 &amp; 1 &amp; 1 &amp; 1 &amp; -\infty &amp; -\infty &amp; -\infty\\
+\text{sequence} &amp; 1 &amp; 1 &amp; 1 &amp; 1 &amp; 1 &amp; -\infty &amp; -\infty\\
+\text{&lt;pad&gt;}     &amp; -\infty &amp; -\infty &amp; -\infty &amp; -\infty &amp; -\infty &amp; -\infty &amp; -\infty\\
+\text{&lt;pad&gt;}     &amp; -\infty &amp; -\infty &amp; -\infty &amp; -\infty &amp; -\infty &amp; -\infty &amp; -\infty\\
+\end{array}
+\]</span></p>
+<p>In the encoder, where the causal mask is not used, this would translate to: <span class="math display">\[
+\begin{array}{r|ccccccc}
+\text{Q} \downarrow \, / \, \text{K} \rightarrow &amp; \text{this} &amp; \text{is} &amp; \text{a} &amp; \text{sample} &amp; \text{sequence} &amp; \text{&lt;pad&gt;} &amp; \text{&lt;pad&gt;}\\
+\hline
+\text{this}     &amp; 1 &amp; 1 &amp; 1 &amp; 1 &amp; 1 &amp; -\infty &amp; -\infty\\
+\text{is}       &amp; 1 &amp; 1 &amp; 1 &amp; 1 &amp; 1 &amp; -\infty &amp; -\infty\\
+\text{a}        &amp; 1 &amp; 1 &amp; 1 &amp; 1 &amp; 1 &amp; -\infty &amp; -\infty\\
+\text{sample}   &amp; 1 &amp; 1 &amp; 1 &amp; 1 &amp; 1 &amp; -\infty &amp; -\infty\\
+\text{sequence} &amp; 1 &amp; 1 &amp; 1 &amp; 1 &amp; 1 &amp; -\infty &amp; -\infty\\
+\text{&lt;pad&gt;}     &amp; -\infty &amp; -\infty &amp; -\infty &amp; -\infty &amp; -\infty &amp; -\infty &amp; -\infty\\
+\text{&lt;pad&gt;}     &amp; -\infty &amp; -\infty &amp; -\infty &amp; -\infty &amp; -\infty &amp; -\infty &amp; -\infty\\
+\end{array}
+\]</span></p>
+<p>Each sequence in the batch will have its own mask, and each head will need to receive the mask as well, so the final mask shape that we pass will be <span class="math inline">\(B \times h \times T \times T\)</span>. As mentioned above, it will be constructed at the data pipeline level, when our input matrix <span class="math inline">\(X\)</span> (<span class="math inline">\(B \times T \times d_{\mathrm{model}}\)</span>) is created. At construction, this mask will be <span class="math inline">\(B \times T \times T\)</span>.</p>
+<p>Ultimately, we need to take this input mask from <span class="math inline">\(B \times T \times T\)</span> to <span class="math inline">\(B \times h \times T \times T\)</span>. But by leveraging the mechanics of PyTorch’s broadcasting rules, we can make this simpler by expanding the mask to <span class="math inline">\(B \times 1 \times T \times T\)</span>, which <code>mask.unsqueeze(1)</code> does.</p>
+<section id="a-note-on-broadcasting" class="level5">
+<h5 class="anchored" data-anchor-id="a-note-on-broadcasting">A note on broadcasting:</h5>
+<p>The reason this works in practice is because of <em>broadcasting</em> in PyTorch. Broadcasting is what PyTorch does when you try to apply an operation to two tensors that don’t have the same shape. Rather than throwing an error, it tries to “expand” one or both tensors to make the shapes compatible. It follows two rules:</p>
+<ol type="1">
+<li>Align shapes from the right. If the tensors have different numbers of dimensions, pad the shorter shape with 1s to the left.</li>
+<li>For each dimension, sizes must either match, or one of them must be 1. If one of them is 1, it gets stretched to match the other.</li>
+</ol>
+<p>If either rule is violated, you get an error.</p>
+<p>When we pass a shape of <span class="math inline">\(B \times 1 \times T \times T\)</span> to a function that expects a shape of <span class="math inline">\(B \times h \times T \times T\)</span>, the broadcasting rules will start from the right: - <span class="math inline">\(T\)</span> matches <span class="math inline">\(T\)</span>: pass - <span class="math inline">\(T\)</span> matches <span class="math inline">\(T\)</span>: pass - <span class="math inline">\(h\)</span> <strong>does not match</strong> <span class="math inline">\(1\)</span>, but one dimension is <span class="math inline">\(1\)</span>, so it gets stretched to match <span class="math inline">\(h\)</span>: pass - <span class="math inline">\(B\)</span> matches <span class="math inline">\(B\)</span>: pass</p>
+<p>If we had not used <code>unsqueeze</code>, we’d try to pass a <span class="math inline">\(B \times T \times T\)</span> shape where a <span class="math inline">\(B \times h \times T \times T\)</span> is expected: - Tensors have different number of dimensions, 4 and 3. The shorter shape gets padded with 1s to the left, so we now have <span class="math inline">\(1 \times B \times T \times T\)</span> and <span class="math inline">\(B \times h \times T \times T\)</span> - <span class="math inline">\(T\)</span> matches <span class="math inline">\(T\)</span>: pass - <span class="math inline">\(T\)</span> matches <span class="math inline">\(T\)</span>: pass - <span class="math inline">\(h\)</span> <strong>does not match</strong> <span class="math inline">\(B\)</span>, and neither dimension is <span class="math inline">\(1\)</span>: FAIL</p>
+<p><code>unsqueeze</code> is what allows us to make use of PyTorch’s broadcasting rules, which ultimately makes our function simpler, more interpretable, and more efficient.</p>
+
+
+</section>
+</section>
+</section>
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

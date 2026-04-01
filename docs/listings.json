@@ -2,12 +2,16 @@
   {
     "listing": "/posts/index.html",
     "items": [
+      "/posts/mechanics-of-reshaping-in-multi-head-attention/index.html",
+      "/posts/multi-head-attention/index.html",
       "/posts/scaled-dot-product-attention/index.html"
     ]
   },
   {
     "listing": "/index.html",
     "items": [
+      "/posts/mechanics-of-reshaping-in-multi-head-attention/index.html",
+      "/posts/multi-head-attention/index.html",
       "/posts/scaled-dot-product-attention/index.html"
     ]
   }

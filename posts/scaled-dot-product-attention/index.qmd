@@ -2,14 +2,14 @@
 title: "Scaled Dot Product Attention"
 date: 2026-03-18
 description: "The foundational intuitions behind scaled dot product attention, the core operation of the transformer architecture."
-categories: [transformers, deep learning, attention]
+categories: [transformers, deep learning, attention, aiayn]
 ---
 *Written by Michael Gethers*
 
 ## Introduction
 The purpose of this document is to fully articulate the foundational intuitions of scaled dot product attention.
 
-This will be the first in a series of documents I intend to put together about the Attention is All You Need paper.  My intent is that this will serve both to edify my own understanding of the paper's concepts, but that it may also help others to build a practical understanding of the hows and whys of transformer architecture.
+This is the first in a series of documents I am writing about Attention is All You Need (Vaswani et al., 2017).  My intent is that this will serve both to edify my own understanding of the paper's concepts, but that it may also help others to build a practical understanding of the hows and whys of transformer architecture.
 
 ## The function
 The scaled dot product attention function, as shown in the Attention is All You Need paper, is the following:
