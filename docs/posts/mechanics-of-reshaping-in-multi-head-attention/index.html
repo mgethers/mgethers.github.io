@@ -395,7 +395,7 @@ x_{1,8} &amp; x_{2,8} &amp; x_{3,8} \\
 \end{bmatrix}
 \right\} {\text{Head 2}}
 \end{aligned}
-\]</span> This indeed produces the correct splits, let’s examine whether this actually produce the right head matrices?</p>
+\]</span> This indeed produces the correct splits, let’s examine whether this actually produces the right head matrices.</p>
 <p>We know from above that we want the first row of our first matrix to be <span class="math inline">\(\begin{bmatrix} x_{1,1} &amp; x_{1,2} &amp; x_{1,3} &amp; x_{1,4}\end{bmatrix}\)</span>. But what matrices will the reshape on the transposed matrix actually produce? If we continue the same protocol, moving in 4 element chunks, we will produce the following head matrices: <span class="math display">\[
 \underbrace{
 \begin{bmatrix}

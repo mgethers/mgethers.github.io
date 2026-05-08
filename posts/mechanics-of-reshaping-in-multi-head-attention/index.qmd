@@ -188,7 +188,7 @@ $$
 \right\} {\text{Head 2}}
 \end{aligned}
 $$
-This indeed produces the correct splits, let's examine whether this actually produce the right head matrices?
+This indeed produces the correct splits, let's examine whether this actually produces the right head matrices.
 
 We know from above that we want the first row of our first matrix to be $\begin{bmatrix} x_{1,1} & x_{1,2} & x_{1,3} & x_{1,4}\end{bmatrix}$.  But what matrices will the reshape on the transposed matrix actually produce?  If we continue the same protocol, moving in 4 element chunks, we will produce the following head matrices:
 $$
